@@ -8,8 +8,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- MapmyIndia CSS -->
+
+    <!-- Mappls CSS -->
     <link rel="stylesheet" href="https://apis.mappls.com/advancedmaps/api/v1/css/mappls-maps.css">
+
     <style>
         body { font-family: 'Inter', sans-serif; }
         .hidden { display: none !important; }
@@ -57,17 +59,15 @@
         </div>
     </div>
 
-    <!-- MapmyIndia JS -->
-    <script src="https://apis.mappls.com/advancedmaps/api/v1/js/mappls-maps.js"></script>
-    
-    <!-- Firebase SDKs -->
+    <!-- Mappls JS with API key in URL -->
+    <script src="https://apis.mappls.com/advancedmaps/api/v1/bf079bfe7e192eb2c2b58117e2801f058/map_sdk"></script>
+
+    <!-- Firebase + App Code -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
         import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-        // --- Your Keys ---
-        const MAPPPLS_API_KEY = "bf079bfe7e192eb2c2b58117e2801f058";
         const firebaseConfig = {
             apiKey: "AIzaSyDYCZe95s4y2NaRSv1wFEV1hesVqQ7mJdE",
             authDomain: "mt-app-e83c0.firebaseapp.com",
@@ -77,28 +77,23 @@
             appId: "1:219145572981:web:5f9fe5f6ef71c3fb439e3c"
         };
 
-        // --- Initialize Firebase ---
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         const provider = new GoogleAuthProvider();
 
-        // --- UI Elements ---
         const loginContainer = document.getElementById('login-container');
         const mapContainer = document.getElementById('map-container');
         const loginButton = document.getElementById('login-button');
         const logoutButton = document.getElementById('logout-button');
-        const loadingSpinner = document.getElementById('loading-spinner');
         const userNameEl = document.getElementById('user-name');
         const userEmailEl = document.getElementById('user-email');
         const userPhotoEl = document.getElementById('user-photo');
 
-        // --- Global Map Variables ---
         let map, marker, unsubscribeFromFirestore, polyline;
         let currentUID = null;
         let mapInitialized = false;
 
-        // --- Authentication Logic ---
         loginButton.onclick = () => signInWithPopup(auth, provider).catch(console.error);
         logoutButton.onclick = () => signOut(auth);
 
@@ -111,9 +106,7 @@
         });
 
         function handleLogin(user) {
-            console.log("User signed in:", user.uid);
             currentUID = user.uid;
-            
             loginContainer.classList.add('hidden');
             mapContainer.classList.remove('hidden');
             userNameEl.textContent = user.displayName;
@@ -127,20 +120,16 @@
         }
 
         function handleLogout() {
-            console.log("User signed out.");
             currentUID = null;
-            
             loginContainer.classList.remove('hidden');
             mapContainer.classList.add('hidden');
-            
             mapInitialized = false;
-            map = null; 
+            map = null;
             if (unsubscribeFromFirestore) unsubscribeFromFirestore();
         }
 
-        // --- Map & Firestore Logic ---
         function initMap() {
-            mappls.key = MAPPPLS_API_KEY;
+            const mappls = window.mappls; // get mappls from global scope
 
             map = new mappls.Map('map', {
                 center: [28.4744, 77.5040],
@@ -148,21 +137,13 @@
             });
 
             map.on('load', () => {
-                console.log("Map is fully loaded and ready.");
-                
                 marker = new mappls.Marker({ map: map, position: map.getCenter() });
-                
+
                 new mappls.search(document.getElementById("search-widget"), {}, (data) => {
                     if (data && data.length > 0) {
                         const place = data[0];
-                        const destinationGeoPoint = {
-                            latitude: place.latitude,
-                            longitude: place.longitude
-                        };
-                        
-                        const docRef = doc(db, "locations", currentUID);
-                        setDoc(docRef, { 
-                            destination: destinationGeoPoint,
+                        setDoc(doc(db, "locations", currentUID), { 
+                            destination: { latitude: place.latitude, longitude: place.longitude },
                             destinationName: place.placeName 
                         }, { merge: true });
                     }
@@ -174,9 +155,7 @@
 
         function listenToLocation(uid) {
             if (unsubscribeFromFirestore) unsubscribeFromFirestore();
-            const docRef = doc(db, "locations", uid);
-
-            unsubscribeFromFirestore = onSnapshot(docRef, (docSnap) => {
+            unsubscribeFromFirestore = onSnapshot(doc(db, "locations", uid), (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     const liveLocation = data.location;
@@ -185,9 +164,7 @@
                     if (liveLocation) {
                         const newPosition = { lat: liveLocation.latitude, lng: liveLocation.longitude };
                         marker.setPosition(newPosition);
-                        if (!destination) {
-                            map.setCenter(newPosition);
-                        }
+                        if (!destination) map.setCenter(newPosition);
                     }
 
                     if (liveLocation && destination) {
@@ -202,23 +179,21 @@
         function calculateAndDisplayRoute(originGeoPoint, destGeoPoint) {
             const origin = `${originGeoPoint.longitude},${originGeoPoint.latitude}`;
             const destination = `${destGeoPoint.longitude},${destGeoPoint.latitude}`;
-
-            const url = `https://apis.mappls.com/advancedmaps/v1/${MAPPPLS_API_KEY}/route_adv/driving/${origin};${destination}?geometries=polyline&overview=full`;
+            const url = `https://apis.mappls.com/advancedmaps/v1/bf079bfe7e192eb2c2b58117e2801f058/route_adv/driving/${origin};${destination}?geometries=polyline&overview=full`;
             
             fetch(url)
                 .then(response => response.json())
                 .then(data => {
                     if (data.routes && data.routes.length > 0) {
-                        const points = data.routes[0].geometry;
-                        drawPath(points);
-                        const bounds = getBoundsFromPolyline(points);
-                        map.fitBounds(bounds, { padding: 50 });
+                        drawPath(data.routes[0].geometry);
+                        map.fitBounds(getBoundsFromPolyline(data.routes[0].geometry), { padding: 50 });
                     }
                 })
                 .catch(console.error);
         }
 
         function drawPath(polylineString) {
+            const mappls = window.mappls;
             if (polyline) polyline.setMap(null);
             const path = mappls.Polyline.fromEncoded(polylineString);
             polyline = new mappls.Polyline({
@@ -230,11 +205,10 @@
         }
 
         function getBoundsFromPolyline(polylineString) {
+            const mappls = window.mappls;
             const coordinates = mappls.Polyline.decode(polylineString);
             const bounds = new mappls.Bounds();
-            coordinates.forEach(coord => {
-                bounds.extend(coord);
-            });
+            coordinates.forEach(coord => bounds.extend(coord));
             return bounds;
         }
     </script>
